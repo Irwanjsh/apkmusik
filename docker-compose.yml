@@ -1,0 +1,69 @@
+# =============================================================
+# docker-compose.yml — Pemutar Musik Offline
+# Orkestrasi: Backend API (Node.js) + Database (PostgreSQL)
+# =============================================================
+
+version: '3.8'
+
+services:
+
+  # ─────────────────────────────────────────
+  # SERVICE 1: Database PostgreSQL
+  # ─────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    container_name: musik_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: musik_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+    ports:
+      - "5432:5432"           # Expose ke host (opsional, untuk debugging)
+    volumes:
+      - pgdata:/var/lib/postgresql/data   # Persistent storage agar data tidak hilang saat container restart
+    networks:
+      - musik_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d musik_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────
+  # SERVICE 2: Backend API Node.js/Express
+  # ─────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend        # Lokasi Dockerfile backend
+      dockerfile: Dockerfile
+    container_name: musik_backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"             # Aplikasi Flutter mengakses via port ini
+    environment:
+      DB_HOST: db               # Nama service database (sesuai nama di atas)
+      DB_PORT: 5432
+      DB_NAME: musik_db
+      DB_USER: admin
+      DB_PASSWORD: admin123
+      PORT: 3000
+    depends_on:
+      db:
+        condition: service_healthy   # Tunggu DB sehat sebelum backend start
+    networks:
+      - musik_network
+
+# ─────────────────────────────────────────
+# VOLUMES: Penyimpanan persisten database
+# ─────────────────────────────────────────
+volumes:
+  pgdata:
+    driver: local
+
+# ─────────────────────────────────────────
+# NETWORKS: Jaringan internal antar service
+# ─────────────────────────────────────────
+networks:
+  musik_network:
+    driver: bridge
